@@ -1,0 +1,314 @@
+{
+  "name": "وصف المنتجات بالذكاء الاصطناعي (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b72c03c2-f22b-4746-b5d1-999e1d708db0",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/products.xlsx",
+        "options": {}
+      },
+      "id": "be1ae5f4-d0bb-4f4c-82b6-0d82aed6e9a0",
+      "name": "اقرأ ملف المنتجات",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "0fe07091-2fcc-4746-9c91-3ff1ea1cccf5",
+      "name": "استخرج صفوف الإكسل",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "system",
+              "type": "string",
+              "value": "أنت كاتب إعلانات لمتجر عربي على الإنترنت. مهمتك كتابة وصف تسويقي قصير للمنتج.\nالتزم بهذه القواعد:\n١. اكتب جملتين أو ثلاث جمل فقط، بعربية فصحى سليمة نحوياً ومفهومة في الخليج والشام، وبالعربية وحدها دون أي كلمة إنجليزية داخل الجملة.\n٢. استعمل فقط المعلومات المذكورة. لا تضف أي ميزة أو رقم أو مكوّن غير موجود.\n٣. ابدأ بفائدة تهمّ العميل، ثم اذكر أبرز ميزة، وأنهِ بدعوة واضحة للشراء مثل: اطلبه الآن.\n٤. لهجة بائع واثق وصادق، بلا مبالغة ولا تكرار ولا وعود مطلقة.\n٥. أعِد الوصف فقط: نصاً عادياً بلا عناوين ولا نقاط ولا رموز."
+            },
+            {
+              "id": "p2",
+              "name": "prompt",
+              "type": "string",
+              "value": "=المنتج: {{ $json[\"الاسم\"] }}\nالفئة: {{ $json[\"الفئة\"] }}\nالمميزات: {{ $json[\"المميزات\"] }}\nالسعر: {{ $json[\"السعر\"] }}"
+            },
+            {
+              "id": "p3",
+              "name": "system_en",
+              "type": "string",
+              "value": "You are a copywriter for an Arabic online store. Write a short English product description.\nRules: exactly 2 short sentences. Use only the given facts; invent nothing. Keep the brand/product name transliterated (do not translate it). Mention the price only if given. Confident, honest seller tone. Return the description only, as plain text."
+            },
+            {
+              "id": "p4",
+              "name": "prompt_en",
+              "type": "string",
+              "value": "=Product: {{ $json[\"الاسم\"] }}\nCategory: {{ $json[\"الفئة\"] }}\nFeatures: {{ $json[\"المميزات\"] }}\nPrice: {{ $json[\"السعر\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0454ee00-e815-4be6-957d-e0b265eef9af",
+      "name": "البرومبت (التعليمات)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"qwen3:8b\", stream: false, think: false, options: { temperature: 0.5, top_p: 0.8, num_predict: 220 }, messages: [ { role: \"system\", content: $json.system }, { role: \"user\", content: $json.prompt } ] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "b0536c30-1a35-4041-98ef-67f0d14ade1a",
+      "name": "الوصف بالعربية (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"qwen3:8b\", stream: false, think: false, options: { temperature: 0.5, top_p: 0.8, num_predict: 220 }, messages: [ { role: \"system\", content: $('البرومبت (التعليمات)').item.json.system_en }, { role: \"user\", content: $('البرومبت (التعليمات)').item.json.prompt_en } ] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "8c3d1f8e-6e43-4f27-b432-7887d116703f",
+      "name": "الوصف بالإنجليزية (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "الاسم",
+              "type": "string",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"الاسم\"] }}"
+            },
+            {
+              "id": "m2",
+              "name": "الفئة",
+              "type": "string",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"الفئة\"] }}"
+            },
+            {
+              "id": "m3",
+              "name": "المميزات",
+              "type": "string",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"المميزات\"] }}"
+            },
+            {
+              "id": "m4",
+              "name": "السعر",
+              "type": "string",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"السعر\"] }}"
+            },
+            {
+              "id": "m5",
+              "name": "الوصف (عربي)",
+              "type": "string",
+              "value": "={{ $('الوصف بالعربية (Ollama)').item.json.message.content }}"
+            },
+            {
+              "id": "m6",
+              "name": "Description (EN)",
+              "type": "string",
+              "value": "={{ $json.message.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e9074737-f910-4005-aa19-712ec9e71eed",
+      "name": "ادمج الوصف في صف",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "products-described.xlsx",
+          "sheetName": "المنتجات مع الوصف",
+          "headerRow": true
+        }
+      },
+      "id": "9b98eb0f-02f4-49ed-b232-40a5a30fbc56",
+      "name": "ابنِ ملف إكسل",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/products-described.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "6c98ec3f-e7ac-4c1b-af83-160ce608c677",
+      "name": "احفظ الناتج",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ ملف المنتجات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ ملف المنتجات": {
+      "main": [
+        [
+          {
+            "node": "استخرج صفوف الإكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج صفوف الإكسل": {
+      "main": [
+        [
+          {
+            "node": "البرومبت (التعليمات)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "البرومبت (التعليمات)": {
+      "main": [
+        [
+          {
+            "node": "الوصف بالعربية (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "الوصف بالعربية (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "الوصف بالإنجليزية (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "الوصف بالإنجليزية (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "ادمج الوصف في صف",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ادمج الوصف في صف": {
+      "main": [
+        [
+          {
+            "node": "ابنِ ملف إكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ ملف إكسل": {
+      "main": [
+        [
+          {
+            "node": "احفظ الناتج",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
