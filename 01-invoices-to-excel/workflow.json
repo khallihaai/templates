@@ -1,0 +1,181 @@
+{
+  "name": "Invoices PDF → one Excel sheet (khallihaai template)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b29d158c-4257-4750-ad33-93788032fd33",
+      "name": "When you click Execute",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "invoices/*.pdf",
+        "options": {}
+      },
+      "id": "0b0cf641-9998-4097-b367-043cdf6f3a1c",
+      "name": "Read the PDF invoices",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "joinPages": true,
+          "keepSource": "json"
+        }
+      },
+      "id": "ffa2135f-3dec-415a-99ec-8407c14cfc15",
+      "name": "Extract text from each PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f2",
+              "name": "Invoice Number",
+              "type": "string",
+              "value": "={{ ($json.text.match(/INV-2026-\\d{4}/) || [''])[0] }}"
+            },
+            {
+              "id": "f3",
+              "name": "Date",
+              "type": "string",
+              "value": "={{ ($json.text.match(/\\d{4}-\\d{2}-\\d{2}/) || [''])[0] }}"
+            },
+            {
+              "id": "f4",
+              "name": "Total (USD)",
+              "type": "string",
+              "value": "={{ ($json.text.match(/(?:Grand Total|Total Due|Amount Due)\\D*([\\d,]+\\.\\d{2})/i) || ['',''])[1] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "845e699b-eeb1-4be1-b8a0-98f170d4e151",
+      "name": "Pull number / date / total",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "invoices.xlsx",
+          "sheetName": "Invoices",
+          "headerRow": true
+        }
+      },
+      "id": "c4111eac-ee58-44bb-a3d1-40d3ad2a617a",
+      "name": "Build one Excel sheet",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/invoices.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "209f5306-a718-4921-97f7-66834aaa6341",
+      "name": "Save invoices.xlsx",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1420,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When you click Execute": {
+      "main": [
+        [
+          {
+            "node": "Read the PDF invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read the PDF invoices": {
+      "main": [
+        [
+          {
+            "node": "Extract text from each PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text from each PDF": {
+      "main": [
+        [
+          {
+            "node": "Pull number / date / total",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull number / date / total": {
+      "main": [
+        [
+          {
+            "node": "Build one Excel sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build one Excel sheet": {
+      "main": [
+        [
+          {
+            "node": "Save invoices.xlsx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
