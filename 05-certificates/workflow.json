@@ -1,0 +1,416 @@
+{
+  "name": "٥٠ شهادة PDF من قائمة إكسل تلقائياً (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f570c77e-00c8-46f8-86a1-fff41f136c65",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/participants.xlsx",
+        "options": {}
+      },
+      "id": "e4e61bd5-27c6-4a40-88a2-6fe240e76762",
+      "name": "اقرأ قائمة المشاركين",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "8e71ba73-ad9a-4c2f-8740-9d3181f37b2a",
+      "name": "استخرج الصفوف",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "رقم الشهادة",
+              "type": "string",
+              "value": "=SAMPLE-{{ String($json[\"الرقم\"]).padStart(4, \"0\") }}"
+            },
+            {
+              "id": "f2",
+              "name": "html",
+              "type": "string",
+              "value": "=<!doctype html>\n<html dir=\"rtl\" lang=\"ar\"><head><meta charset=\"utf-8\">\n<link rel=\"stylesheet\" href=\"cert.css\"></head>\n<body><div class=\"sheet\">\n  <div class=\"inner-frame\"></div>\n  <div class=\"watermark\"><span>SAMPLE DATA · بيانات تجريبية</span></div>\n  <div class=\"crest\">★</div>\n  <div class=\"issuer\">مركز نماء للتدريب</div>\n  <div class=\"rule\"></div>\n  <div class=\"title\">شهادة إتمام</div>\n  <div class=\"lead\">تُمنح هذه الشهادة إلى</div>\n  <div class=\"name\">{{ $json[\"الاسم\"] }}</div>\n  <div class=\"for\">تقديراً لإتمام دورة</div>\n  <div class=\"course\">{{ $json[\"الدورة\"] }}</div>\n  <div class=\"date\">بنجاح، بتاريخ {{ $json[\"التاريخ\"] }}</div>\n  <div class=\"sample-tag\">بيانات تجريبية — SAMPLE DATA</div>\n  <div class=\"footer\">\n    <div class=\"sig\"><div class=\"line\"></div><div class=\"who\">مدير المركز</div></div>\n    <div class=\"seal\">خُتم<br>المركز</div>\n    <div class=\"cid\"><div class=\"num\">SAMPLE-{{ String($json[\"الرقم\"]).padStart(4, \"0\") }}</div><div class=\"lab\">رقم الشهادة</div></div>\n  </div>\n</div></body></html>\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b5013a31-d8e3-40e0-8970-0bff5379339f",
+      "name": "املأ قالب الشهادة",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "html",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "cert.html",
+          "encoding": "utf8"
+        }
+      },
+      "id": "052ae2d0-a2d3-4e83-a098-47165381f990",
+      "name": "حوّل إلى صفحة HTML",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=output/html/cert-{{ $('املأ قالب الشهادة').item.json[\"الرقم\"] }}.html",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "23e88e9b-945d-45ed-8d0d-667a9a851383",
+      "name": "احفظ صفحة الشهادة",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "./render_certs.sh"
+      },
+      "id": "cb5013d9-23b3-4349-9518-357cbc20ec7a",
+      "name": "أنشئ ملفات PDF",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1720,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "output/render-log.csv",
+        "options": {}
+      },
+      "id": "1a46f3f1-ad7b-4909-9ff2-a99118a9e7f4",
+      "name": "اقرأ سجل التنفيذ",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "e8944a31-7470-410d-8dac-643cd862e3df",
+      "name": "استخرج السجل",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "id": "f3e963b9-8a67-4a93-82fb-38aa78dd21de",
+      "name": "ادمج مع بيانات المشاركين",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "l0",
+              "name": "الرقم",
+              "type": "number",
+              "value": "={{ $json[\"الرقم\"] }}"
+            },
+            {
+              "id": "l1",
+              "name": "الاسم",
+              "type": "string",
+              "value": "={{ $json[\"الاسم\"] }}"
+            },
+            {
+              "id": "l2",
+              "name": "الدورة",
+              "type": "string",
+              "value": "={{ $json[\"الدورة\"] }}"
+            },
+            {
+              "id": "l3",
+              "name": "التاريخ",
+              "type": "string",
+              "value": "={{ $json[\"التاريخ\"] }}"
+            },
+            {
+              "id": "l4",
+              "name": "رقم الشهادة",
+              "type": "string",
+              "value": "={{ $json[\"رقم الشهادة\"] }}"
+            },
+            {
+              "id": "l5",
+              "name": "ملف الشهادة",
+              "type": "string",
+              "value": "={{ $json[\"ملف الشهادة\"] }}"
+            },
+            {
+              "id": "l6",
+              "name": "الحجم",
+              "type": "string",
+              "value": "={{ $json[\"الحجم\"] }}"
+            },
+            {
+              "id": "l7",
+              "name": "الحالة",
+              "type": "string",
+              "value": "={{ $json[\"الحالة\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "80af7178-c830-40e5-831c-ef464e218d0f",
+      "name": "جهّز سجل الشهادات",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "certificates-log.xlsx",
+          "sheetName": "سجل الشهادات",
+          "headerRow": true
+        }
+      },
+      "id": "289d7a32-b168-45d1-9e6b-cfeceabbc591",
+      "name": "ابنِ ملف إكسل",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/certificates-log.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "b4da865f-c837-4b8d-b91d-aa33aff51f6c",
+      "name": "احفظ السجل",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        3220,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ قائمة المشاركين",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ قائمة المشاركين": {
+      "main": [
+        [
+          {
+            "node": "استخرج الصفوف",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج الصفوف": {
+      "main": [
+        [
+          {
+            "node": "املأ قالب الشهادة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "املأ قالب الشهادة": {
+      "main": [
+        [
+          {
+            "node": "حوّل إلى صفحة HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ادمج مع بيانات المشاركين",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "حوّل إلى صفحة HTML": {
+      "main": [
+        [
+          {
+            "node": "احفظ صفحة الشهادة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "احفظ صفحة الشهادة": {
+      "main": [
+        [
+          {
+            "node": "أنشئ ملفات PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "أنشئ ملفات PDF": {
+      "main": [
+        [
+          {
+            "node": "اقرأ سجل التنفيذ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ سجل التنفيذ": {
+      "main": [
+        [
+          {
+            "node": "استخرج السجل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج السجل": {
+      "main": [
+        [
+          {
+            "node": "ادمج مع بيانات المشاركين",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "ادمج مع بيانات المشاركين": {
+      "main": [
+        [
+          {
+            "node": "جهّز سجل الشهادات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "جهّز سجل الشهادات": {
+      "main": [
+        [
+          {
+            "node": "ابنِ ملف إكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ ملف إكسل": {
+      "main": [
+        [
+          {
+            "node": "احفظ السجل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
