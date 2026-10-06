@@ -1,0 +1,153 @@
+{
+  "name": "حوّل صور الإيصالات إلى جدول إكسل واحد تلقائياً (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1ee19cfb-86ef-4b4c-a30a-d67cfa9c4e57",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/*.jpg",
+        "options": {}
+      },
+      "id": "522e5bde-fe0b-4344-a5bb-2c07d75c20b2",
+      "name": "اقرأ صور الإيصالات",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const { execFileSync } = require('child_process');\nconst items = $input.all();\n\nconst DATE_RE  = /\\d{1,4}[/.\\-]\\d{1,2}[/.\\-]\\d{1,4}/;\nconst PRICE_RE = /\\d+[.,]\\d{1,2}/g;\nconst TOTAL_KW = ['الإجمالي','الاجمالي','الإجمالى','الاجمالى','المجموع','الصافي','الصافى'];\nconst GENERIC  = ['إيصال','فاتورة','سند','receipt','invoice'];\n\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const bin = items[i].binary && items[i].binary.data;\n  const name = (bin && bin.fileName) ? bin.fileName : ('receipt-' + (i + 1));\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  let text = '';\n  try {\n    text = execFileSync('tesseract', ['stdin', 'stdout', '-l', 'ara+eng', '--psm', '6'],\n      { input: buf, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, stdio: ['pipe', 'pipe', 'ignore'] });\n  } catch (e) { text = ''; }\n\n  const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);\n  const shop = lines.length ? lines[0] : '';\n  const shopFound = !!shop && !GENERIC.some(g => shop.includes(g));\n  const dm = text.match(DATE_RE);\n  const date = dm ? dm[0] : '';\n  let cands = [];\n  for (const ln of lines) {\n    if (TOTAL_KW.some(k => ln.includes(k))) {\n      for (const n of (ln.match(PRICE_RE) || [])) cands.push(parseFloat(n.replace(',', '.')));\n    }\n  }\n  const total = cands.length ? Math.max.apply(null, cands) : null;\n\n  const missing = [];\n  if (!shopFound) missing.push('اسم المتجر');\n  if (!date)      missing.push('التاريخ');\n  if (total === null) missing.push('الإجمالي');\n  const status = missing.length ? 'مراجعة' : 'تم';\n\n  out.push({ json: {\n    'الملف': name,\n    'المتجر': shop,\n    'التاريخ': date,\n    'الإجمالي': total,\n    'الحالة': status,\n    'ملاحظة': missing.length ? ('يحتاج تدقيق: ' + missing.join('، ')) : '',\n    'النص_المقروء': text.replace(/\\s+/g, ' ').trim().slice(0, 80),\n  } });\n}\nreturn out;\n"
+      },
+      "id": "0d4ee668-0c4d-4949-b401-2f06fd1da661",
+      "name": "اقرأ النص من كل صورة",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const XLSX = require('@e965/xlsx');\nconst rows = $input.all().map(i => i.json);\n\nconst header = ['الملف', 'المتجر', 'التاريخ', 'الإجمالي', 'الحالة', 'ملاحظة'];\nconst dataAoa = [header];\nlet done = 0, review = 0, sum = 0;\nfor (const r of rows) {\n  dataAoa.push([r['الملف'], r['المتجر'], r['التاريخ'], r['الإجمالي'], r['الحالة'], r['ملاحظة']]);\n  if (r['الحالة'] === 'تم') done++; else review++;\n  if (typeof r['الإجمالي'] === 'number') sum += r['الإجمالي'];\n}\n\nconst sumAoa = [];\nsumAoa.push(['ملخص قراءة الإيصالات (SAMPLE DATA)']);\nsumAoa.push([]);\nsumAoa.push(['عدد الإيصالات', rows.length]);\nsumAoa.push(['مكتملة (تم)', done]);\nsumAoa.push(['بحاجة لمراجعة', review]);\nsumAoa.push(['مجموع الإجماليات المقروءة', Math.round(sum * 100) / 100]);\n\nconst wb = XLSX.utils.book_new();\nXLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dataAoa), 'الإيصالات');\nXLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumAoa), 'الملخص');\nconst buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(buf), 'receipts.xlsx',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { receipts: rows.length, done: done, review: review,\n  sum_total: Math.round(sum * 100) / 100 }, binary: { data: bin } }];\n"
+      },
+      "id": "227fe8ac-dc98-4f81-865d-97adfe924a1b",
+      "name": "ابنِ جدول الإكسل",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/receipts.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "8f32d7eb-dccd-4335-9b85-3216cb8e5282",
+      "name": "احفظ ملف الإكسل",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "count",
+              "field": "الملف"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "الحالة",
+        "options": {}
+      },
+      "id": "6d39adbf-97e0-431f-8445-77e6c99463a9",
+      "name": "ملخص الحالة",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ صور الإيصالات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ صور الإيصالات": {
+      "main": [
+        [
+          {
+            "node": "اقرأ النص من كل صورة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ النص من كل صورة": {
+      "main": [
+        [
+          {
+            "node": "ابنِ جدول الإكسل",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ملخص الحالة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ جدول الإكسل": {
+      "main": [
+        [
+          {
+            "node": "احفظ ملف الإكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
