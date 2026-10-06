@@ -1,0 +1,285 @@
+{
+  "name": "تلخيص تقارير PDF بالذكاء الاصطناعي (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ac4911c7-eca9-4a78-9780-e77c19bcdcfb",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/*.pdf",
+        "options": {}
+      },
+      "id": "65c98e81-632b-47f7-8293-5abdb4b0b21f",
+      "name": "اقرأ ملفات التقارير",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "name",
+              "type": "string",
+              "value": "={{ $json.fileName.replace(/\\.pdf$/i, '') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d445f6b8-768b-49e6-bd1b-04efe111680c",
+      "name": "التقط اسم الملف",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "joinPages": true,
+          "keepSource": "json"
+        }
+      },
+      "id": "283bed38-2d62-4f85-a398-de9eac55fc64",
+      "name": "استخرج نص الـPDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        910,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "system",
+              "type": "string",
+              "value": "أنت مساعد متخصص في تلخيص التقارير. مهمتك تلخيص التقرير التالي في صفحة واحدة بالعربية الفصحى.\nالتزم بهذه القواعد:\n١. ابدأ بعنوان «# ملخص التقرير»، ثم قسم «## ملخص تنفيذي» من ثلاث إلى أربع جُمل.\n٢. ثم قسم «## أهم النقاط» على شكل نقاط موجزة من أربع إلى ست نقاط.\n٣. إن تضمّن التقرير توصيات أو خطوات تالية، أضِف قسم «## التوصيات» بنقاط قصيرة.\n٤. استخدم فقط ما ورد في التقرير، ولا تُضف أي رقم أو معلومة غير موجودة، واحتفظ بالأرقام كما هي.\n٥. لغة عربية واضحة ومهنية، بلا حشو ولا تكرار، وبلا أي كلمة إنجليزية داخل الجُمل.\n٦. أعِد الملخص فقط بصيغة ماركداون، دون أي شرح إضافي قبله أو بعده."
+            },
+            {
+              "id": "p2",
+              "name": "prompt",
+              "type": "string",
+              "value": "=لخّص هذا التقرير في صفحة واحدة. النص المستخرج من التقرير (ملف: {{ $json.file }}):\n\n{{ $json.text.slice(0, 6000) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "10d8c26e-2f8c-4b07-969a-d641580559f3",
+      "name": "البرومبت (التعليمات)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"qwen3:8b\", stream: false, think: false, options: { temperature: 0.3, top_p: 0.9, num_predict: 800, num_ctx: 8192 }, messages: [ { role: \"system\", content: $json.system }, { role: \"user\", content: $json.prompt } ] }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "73e77682-d336-467d-b907-d2fcf2b6dae5",
+      "name": "لخّص بالذكاء الاصطناعي (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1370,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "name",
+              "type": "string",
+              "value": "={{ $('التقط اسم الملف').item.json.name }}"
+            },
+            {
+              "id": "m2",
+              "name": "summary",
+              "type": "string",
+              "value": "={{ $json.message.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eeaaa8d4-4334-4fd2-8130-8069cc227a74",
+      "name": "ابنِ الملخص (صفحة واحدة)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "summary",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "={{ $('التقط اسم الملف').item.json.name }}-ملخص.md",
+          "encoding": "utf8"
+        }
+      },
+      "id": "0b960020-924c-4432-a2ba-5bf463952395",
+      "name": "احفظ كملف ماركداون",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1830,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=output/{{ $binary.data.fileName }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "a4f8019a-e5c8-42d2-9c7b-a272971c4e7d",
+      "name": "اكتب الملخص",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2060,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ ملفات التقارير",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ ملفات التقارير": {
+      "main": [
+        [
+          {
+            "node": "التقط اسم الملف",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "التقط اسم الملف": {
+      "main": [
+        [
+          {
+            "node": "استخرج نص الـPDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج نص الـPDF": {
+      "main": [
+        [
+          {
+            "node": "البرومبت (التعليمات)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "البرومبت (التعليمات)": {
+      "main": [
+        [
+          {
+            "node": "لخّص بالذكاء الاصطناعي (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "لخّص بالذكاء الاصطناعي (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "ابنِ الملخص (صفحة واحدة)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ الملخص (صفحة واحدة)": {
+      "main": [
+        [
+          {
+            "node": "احفظ كملف ماركداون",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "احفظ كملف ماركداون": {
+      "main": [
+        [
+          {
+            "node": "اكتب الملخص",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
