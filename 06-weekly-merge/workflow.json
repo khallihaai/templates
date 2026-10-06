@@ -1,0 +1,188 @@
+{
+  "name": "دمج 7 ملفات مبيعات يومية في ملخص أسبوعي واحد (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ed78da70-7775-4096-8a1d-e5a3332d57e6",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/*.xlsx",
+        "options": {}
+      },
+      "id": "39623782-675c-4bc7-aa39-1e31a6340b22",
+      "name": "اقرأ ملفات الأيام السبعة",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "479d565f-16b3-47c0-95e3-a8f954a266c3",
+      "name": "استخرج صفوف الإكسل",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const XLSX = require('@e965/xlsx');\nconst rows = $input.all().map(i => i.json);\nconst num = v => Number(v) || 0;\n\n// ---- DATA tab: all merged rows, in order ----\nconst dataHeader = ['التاريخ', 'اليوم', 'المنتج', 'الكمية', 'الإجمالي'];\nconst dataAoa = [dataHeader];\nfor (const r of rows) dataAoa.push([r['التاريخ'], r['اليوم'], r['المنتج'], num(r['الكمية']), num(r['الإجمالي'])]);\n\n// ---- totals per day and per product ----\nconst byDay = {}, dayOrder = [];\nconst byProd = {}, prodOrder = [];\nfor (const r of rows) {\n  const d = r['التاريخ'];\n  if (!(d in byDay)) { byDay[d] = { day: r['اليوم'], qty: 0, rev: 0 }; dayOrder.push(d); }\n  byDay[d].qty += num(r['الكمية']); byDay[d].rev += num(r['الإجمالي']);\n  const p = r['المنتج'];\n  if (!(p in byProd)) { byProd[p] = { qty: 0, rev: 0 }; prodOrder.push(p); }\n  byProd[p].qty += num(r['الكمية']); byProd[p].rev += num(r['الإجمالي']);\n}\nlet gQty = 0, gRev = 0;\nfor (const d of dayOrder) { gQty += byDay[d].qty; gRev += byDay[d].rev; }\n\n// ---- SUMMARY tab ----\nconst sumAoa = [];\nsumAoa.push(['ملخص المبيعات الأسبوعية (SAMPLE DATA)']);\nsumAoa.push([]);\nsumAoa.push(['الإجمالي لكل يوم']);\nsumAoa.push(['اليوم', 'التاريخ', 'إجمالي الكمية', 'إجمالي المبيعات']);\nfor (const d of dayOrder) sumAoa.push([byDay[d].day, d, byDay[d].qty, byDay[d].rev]);\nsumAoa.push([]);\nsumAoa.push(['الإجمالي لكل منتج']);\nsumAoa.push(['المنتج', 'إجمالي الكمية', 'إجمالي المبيعات']);\nfor (const p of prodOrder) sumAoa.push([p, byProd[p].qty, byProd[p].rev]);\nsumAoa.push([]);\nsumAoa.push(['الإجمالي العام', '', gQty, gRev]);\n\nconst wb = XLSX.utils.book_new();\nXLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dataAoa), 'البيانات الأسبوعية');\nXLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumAoa), 'الملخص');\nconst buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(buf), 'weekly-summary.xlsx',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { files: 7, rows: rows.length, days: dayOrder.length, products: prodOrder.length,\n  grand_qty: gQty, grand_revenue: gRev }, binary: { data: bin } }];\n"
+      },
+      "id": "424f08a2-43cb-4ddd-bacf-8edcdd276f05",
+      "name": "ابنِ التقرير الأسبوعي",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/weekly-summary.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "52480129-893f-42d9-b12a-34927c474b0a",
+      "name": "احفظ الملف الأسبوعي",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "sum",
+              "field": "الكمية"
+            },
+            {
+              "aggregation": "sum",
+              "field": "الإجمالي"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "اليوم",
+        "options": {}
+      },
+      "id": "27ad990a-2ef2-4daf-a8db-eff2c8c754f0",
+      "name": "ملخص كل يوم",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "sum",
+              "field": "الكمية"
+            },
+            {
+              "aggregation": "sum",
+              "field": "الإجمالي"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "المنتج",
+        "options": {}
+      },
+      "id": "54055529-b81f-4ad1-b4ba-ce11b8b6cdd3",
+      "name": "ملخص كل منتج",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ ملفات الأيام السبعة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ ملفات الأيام السبعة": {
+      "main": [
+        [
+          {
+            "node": "استخرج صفوف الإكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج صفوف الإكسل": {
+      "main": [
+        [
+          {
+            "node": "ابنِ التقرير الأسبوعي",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ملخص كل يوم",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ملخص كل منتج",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ التقرير الأسبوعي": {
+      "main": [
+        [
+          {
+            "node": "احفظ الملف الأسبوعي",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
