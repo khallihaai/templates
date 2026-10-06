@@ -1,0 +1,203 @@
+{
+  "name": "من قائمة أسعار إكسل إلى كتالوج منتجات PDF (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8e8adf19-1095-4d12-8ebc-5578f47e0e27",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/price-list.xlsx",
+        "options": {}
+      },
+      "id": "7fdb2d0c-b53b-4709-a01c-bbc469e5c50a",
+      "name": "اقرأ قائمة الأسعار",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        470,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "1dab7f57-3ea0-4b88-b995-2a09091eb8be",
+      "name": "استخرج المنتجات",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Shared catalogue-HTML builder. ONE source of truth: this exact function body is pasted into the\n// n8n Code node (make_workflow_d7.py). It takes product rows and returns ONE print-ready HTML\n// document (A4), grouped by category: a cover page + a card per product with its price. No AI, no\n// external module — plain string building. SAMPLE DATA stays in the cover + the running footer.\nfunction buildCatalogHTML(rows, shop) {\n  const esc = s => String(s == null ? '' : s)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  const AR = '٠١٢٣٤٥٦٧٨٩';\n  const toAr = n => String(n).replace(/[0-9]/g, d => AR[+d]);  // price digits -> Eastern Arabic\n\n  // group by category, preserving first-seen order\n  const order = [], byCat = {};\n  for (const r of rows) {\n    const c = r.category || 'أخرى';\n    if (!(c in byCat)) { byCat[c] = []; order.push(c); }\n    byCat[c].push(r);\n  }\n\n  const card = r => `\n      <div class=\"card\">\n        <div class=\"sku\">${esc(r.sku)}</div>\n        <div class=\"pname\">${esc(r.product)}</div>\n        <div class=\"pdesc\">${esc(r.desc)}</div>\n        <div class=\"prow\">\n          <span class=\"price\">${toAr(r.price)}</span>\n          <span class=\"unit\">${esc(r.unit)}</span>\n        </div>\n      </div>`;\n\n  const section = (c, i) => `\n    <section class=\"cat${i === 0 ? ' first' : ''}\">\n      <div class=\"cathead\"><span class=\"catname\">${esc(c)}</span>\n        <span class=\"catcount\">${toAr(byCat[c].length)} منتج</span></div>\n      <div class=\"grid\">${byCat[c].map(card).join('')}</div>\n    </section>`;\n\n  const total = rows.length;\n  const cats = order.length;\n  const body = order.map(section).join('');\n\n  return `<!doctype html>\n<html dir=\"rtl\" lang=\"ar\"><head><meta charset=\"utf-8\"><style>\n@page { size: A4; margin: 0; }\n* { box-sizing: border-box; margin: 0; padding: 0; }\nhtml, body { font-family: \"Noto Kufi Arabic\",\"Noto Naskh Arabic\",\"DejaVu Sans\",sans-serif; color:#1b2330; }\nbody { padding-bottom: 20mm; }\n.cover {\n  height: 297mm; background:#0E1118; color:#F2F4F8; display:flex; flex-direction:column;\n  align-items:center; justify-content:center; text-align:center; break-after: page; position:relative;\n}\n.cover .bar { width:70mm; height:3mm; background:#FFB800; border-radius:2mm; margin:9mm 0; }\n.cover .shop { font-size:30pt; font-weight:800; color:#FFB800; letter-spacing:.3pt; }\n.cover .ttl { font-size:21pt; font-weight:700; margin-top:5mm; }\n.cover .sub { font-size:13pt; color:#AEB8CC; margin-top:7mm; }\n.cover .meta { font-size:12pt; color:#8A96AE; margin-top:3mm; }\n.cover .ribbon {\n  position:absolute; top:16mm; left:50%; transform:translateX(-50%);\n  border:1.4pt solid #FFB800; color:#FFD766; font-size:11pt; font-weight:700;\n  padding:2mm 7mm; border-radius:6mm; letter-spacing:.4pt;\n}\n.cat { padding: 10mm 14mm 0; break-inside: avoid; }\n.cat.first { padding-top: 12mm; }\n.cathead {\n  display:flex; align-items:center; justify-content:space-between;\n  background:#141A28; color:#fff; border-radius:3mm; padding:3.4mm 6mm; margin-bottom:6mm;\n  border-right:3mm solid #FFB800;\n}\n.cathead .catname { font-size:16pt; font-weight:800; }\n.cathead .catcount { font-size:10.5pt; color:#FFD766; font-weight:700; }\n.grid { display:grid; grid-template-columns:1fr 1fr; gap:6mm; }\n.card {\n  position:relative; background:#fff; border:0.5pt solid #E2E6EE; border-radius:3mm;\n  padding:6mm 6mm 5mm; box-shadow:0 0.6mm 2mm rgba(20,26,40,.06); break-inside: avoid; overflow:hidden;\n}\n.card::before { content:\"\"; position:absolute; top:0; right:0; width:3mm; height:100%; background:#FFB800; opacity:.9; }\n.card .sku { position:absolute; top:4mm; left:6mm; font-size:8.5pt; color:#9AA6BC; direction:ltr; letter-spacing:.4pt; }\n.card .pname { font-size:14.5pt; font-weight:800; color:#17202E; margin-bottom:2mm; padding-left:16mm; }\n.card .pdesc { font-size:10.5pt; color:#5B6678; line-height:1.5; min-height:11mm; }\n.prow { display:flex; align-items:center; gap:4mm; margin-top:3mm; }\n.price {\n  background:#FFB800; color:#1b2330; font-size:16pt; font-weight:800; border-radius:6mm;\n  padding:1.6mm 7mm; min-width:18mm; text-align:center;\n}\n.unit { font-size:10pt; color:#6B7686; }\n.foot {\n  position: fixed; bottom: 0; left: 0; right: 0; height: 13mm;\n  display:flex; align-items:center; justify-content:space-between; padding:0 14mm;\n  font-size:9.5pt; color:#8A96AE; border-top:0.5pt solid #E2E6EE; background:#fff;\n}\n.foot .sd { color:#B9803A; font-weight:700; }\n</style></head>\n<body>\n  <div class=\"cover\">\n    <div class=\"ribbon\">بيانات تجريبية · SAMPLE DATA</div>\n    <div class=\"shop\">${esc(shop)}</div>\n    <div class=\"bar\"></div>\n    <div class=\"ttl\">قائمة المنتجات والأسعار</div>\n    <div class=\"sub\">${toAr(total)} منتجاً في ${toAr(cats)} فئات</div>\n    <div class=\"meta\">الأسعار بعملتك · كتالوج أُنشئ تلقائياً بـ n8n</div>\n  </div>\n  ${body}\n  <div class=\"foot\"><span>${esc(shop)} · قائمة الأسعار</span><span class=\"sd\">بيانات تجريبية — SAMPLE DATA</span></div>\n</body></html>`;\n}\n\n// ---- n8n wrapper: map the Arabic columns of the price list -> builder rows, return catalog.html ----\nconst rows = $input.all().map(i => i.json).map(r => ({\n  category: r['الفئة'],\n  product:  r['المنتج'],\n  desc:     r['وصف مختصر'],\n  price:    r['السعر'],\n  unit:     r['الوحدة'],\n  sku:      r['الرمز'],\n}));\nconst shop = 'متجر السنابل';\nconst html = buildCatalogHTML(rows, shop);\nconst cats = [...new Set(rows.map(r => r.category))];\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(html, 'utf8'),\n  'catalog.html', 'text/html');\nreturn [{ json: { products: rows.length, categories: cats.length, file: 'catalog.html' },\n  binary: { data: bin } }];\n"
+      },
+      "id": "3a9fdf45-e5a5-4696-9d0e-746508b9a710",
+      "name": "ابنِ صفحة الكتالوج",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        970,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/catalog.html",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "c2b14017-8581-4463-84aa-4ffc2bb9e2e3",
+      "name": "احفظ صفحة HTML",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "./render_catalog.sh"
+      },
+      "id": "db743274-b918-4625-ad2c-b1e5da66d4bb",
+      "name": "أنشئ ملف الكتالوج PDF",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1470,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "output/render-log.csv",
+        "options": {}
+      },
+      "id": "1f3378ce-aaf3-439b-b58f-35ca08bc39d6",
+      "name": "اقرأ سجل الإنشاء",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "b4536c1d-e175-4540-9e5e-c545f91cb15d",
+      "name": "استخرج السجل",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1970,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ قائمة الأسعار",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ قائمة الأسعار": {
+      "main": [
+        [
+          {
+            "node": "استخرج المنتجات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج المنتجات": {
+      "main": [
+        [
+          {
+            "node": "ابنِ صفحة الكتالوج",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ صفحة الكتالوج": {
+      "main": [
+        [
+          {
+            "node": "احفظ صفحة HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "احفظ صفحة HTML": {
+      "main": [
+        [
+          {
+            "node": "أنشئ ملف الكتالوج PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "أنشئ ملف الكتالوج PDF": {
+      "main": [
+        [
+          {
+            "node": "اقرأ سجل الإنشاء",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ سجل الإنشاء": {
+      "main": [
+        [
+          {
+            "node": "استخرج السجل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
