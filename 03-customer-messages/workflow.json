@@ -1,0 +1,400 @@
+{
+  "name": "فرز رسائل الزبائن بالذكاء الاصطناعي (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "4faad37f-5a85-41c5-a76b-98a4fb4db4c5",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "input/messages.xlsx",
+        "options": {}
+      },
+      "id": "a1ff510c-baf6-43c3-a9cf-edb913563010",
+      "name": "اقرأ ملف الرسائل",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "9d54380f-bc84-4e3d-ad5f-185d5d4cccd4",
+      "name": "استخرج صفوف الإكسل",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "system",
+              "type": "string",
+              "value": "أنت مساعد خدمة عملاء لمتجر عربي على الإنترنت. مهمتك فرز رسالة الزبون.\nصنّف الرسالة إلى فئة واحدة بالضبط من هذه الفئات الأربع فقط:\n• «طلب»: الزبون يريد إجراءً على طلب شراء — يطلب منتجاً، أو يعيد طلباً، أو يلغي، أو يطلب كمية.\n• «شكوى»: الزبون يعبّر عن مشكلة أو استياء — منتج تالف، تأخّر، خطأ، سوء خدمة، أو طلب استبدال بسبب خطأ.\n• «سؤال»: الزبون يستفسر عن معلومة — السعر، الشحن، التوفّر، طريقة الدفع، التتبّع، الفروع.\n• «أخرى»: شكر أو تحية أو تأكيد استلام أو أي رسالة بلا إجراء مطلوب.\nوإذا اجتمع في الرسالة مشكلة وطلب معاً، فالأصل هو «شكوى».\nثم حدّد الأولوية: «عاجل» إذا كان فيها غضب، أو مشكلة مالية، أو منتج تالف، أو موعد ضيق، أو تكرار محاولة بلا رد؛ وإلا «عادي».\nثم اكتب رداً مقترحاً: جملة أو جملتان بالعربية الفصحى، مهذّب ومتعاطف ومهني، بلا وعود مطلقة، ولا تختلق أسعاراً أو أرقاماً أو مواعيد محدّدة.\nأعِد كائن JSON فقط بالمفاتيح: category و urgency و reply. قيمة category واحدة من: طلب، شكوى، سؤال، أخرى. وقيمة urgency واحدة من: عاجل، عادي.\nأمثلة:\nالرسالة: «بكم التوصيل لجدة ومتى يوصل؟» → {\"category\":\"سؤال\",\"urgency\":\"عادي\",\"reply\":\"أهلاً بك، سعر التوصيل لجدة يظهر عند إتمام الطلب، والمدة عادةً من يومين إلى ثلاثة. سعدنا بسؤالك.\"}\nالرسالة: «وصلني المنتج ناقص قطعة وأنا زعلان» → {\"category\":\"شكوى\",\"urgency\":\"عاجل\",\"reply\":\"نعتذر بصدق عن هذا الخطأ، ونقدّر انزعاجك. أرسل لنا رقم طلبك وسنعوّض القطعة الناقصة فوراً.\"}\nالرسالة: «أبغى أطلب ثلاث علب من العسل» → {\"category\":\"طلب\",\"urgency\":\"عادي\",\"reply\":\"يسعدنا طلبك! سنجهّز ثلاث علب من العسل، أرسل لنا عنوانك وطريقة الدفع المفضّلة لإتمام الطلب.\"}"
+            },
+            {
+              "id": "p2",
+              "name": "prompt",
+              "type": "string",
+              "value": "=الرسالة: «{{ $json[\"الرسالة\"] }}»"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f2d72104-133e-46a5-b778-1a6dbe542321",
+      "name": "البرومبت (التعليمات)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"qwen3:8b\", stream: false, think: false, format: \"json\", options: { temperature: 0.2, top_p: 0.8, num_predict: 300 }, messages: [ { role: \"system\", content: $json.system }, { role: \"user\", content: $json.prompt } ] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "6f913f71-23ec-4c72-a423-23deead84996",
+      "name": "صنّف الرسالة (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r0",
+              "name": "الرقم",
+              "type": "number",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"الرقم\"] }}"
+            },
+            {
+              "id": "r1",
+              "name": "الرسالة",
+              "type": "string",
+              "value": "={{ $('البرومبت (التعليمات)').item.json[\"الرسالة\"] }}"
+            },
+            {
+              "id": "r2",
+              "name": "التصنيف",
+              "type": "string",
+              "value": "={{ JSON.parse($json.message.content).category }}"
+            },
+            {
+              "id": "r3",
+              "name": "الأولوية",
+              "type": "string",
+              "value": "={{ JSON.parse($json.message.content).urgency }}"
+            },
+            {
+              "id": "r4",
+              "name": "الرد المقترح",
+              "type": "string",
+              "value": "={{ JSON.parse($json.message.content).reply }}"
+            },
+            {
+              "id": "r5",
+              "name": "cat_rank",
+              "type": "number",
+              "value": "={{ ({'طلب':1,'شكوى':2,'سؤال':3,'أخرى':4})[JSON.parse($json.message.content).category] || 9 }}"
+            },
+            {
+              "id": "r6",
+              "name": "urg_rank",
+              "type": "number",
+              "value": "={{ JSON.parse($json.message.content).urgency === 'عاجل' ? 1 : 2 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c5353411-6916-4a5d-9c1d-93c57a988770",
+      "name": "حلّل النتيجة",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "cat_rank",
+              "order": "ascending"
+            },
+            {
+              "fieldName": "urg_rank",
+              "order": "ascending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28d202c2-2e5c-4345-9f38-229d05b39ac1",
+      "name": "رتّب حسب الفئة",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s0",
+              "name": "الرقم",
+              "type": "number",
+              "value": "={{ $json[\"الرقم\"] }}"
+            },
+            {
+              "id": "s1",
+              "name": "الرسالة",
+              "type": "string",
+              "value": "={{ $json[\"الرسالة\"] }}"
+            },
+            {
+              "id": "s2",
+              "name": "التصنيف",
+              "type": "string",
+              "value": "={{ $json[\"التصنيف\"] }}"
+            },
+            {
+              "id": "s3",
+              "name": "الأولوية",
+              "type": "string",
+              "value": "={{ $json[\"الأولوية\"] }}"
+            },
+            {
+              "id": "s4",
+              "name": "الرد المقترح",
+              "type": "string",
+              "value": "={{ $json[\"الرد المقترح\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "be11bba1-2f9a-43a3-afd2-75c005c30f81",
+      "name": "جهّز الأعمدة",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "messages-sorted.xlsx",
+          "sheetName": "الرسائل مصنّفة",
+          "headerRow": true
+        }
+      },
+      "id": "46d9a650-9d53-440b-bc8d-14f52331ef74",
+      "name": "ابنِ ملف إكسل",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/messages-sorted.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "f8abb753-6e20-4b65-82a8-cdce78c6a989",
+      "name": "احفظ الناتج",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "aggregation": "count",
+              "field": "الرقم"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "التصنيف",
+        "options": {}
+      },
+      "id": "1b505c90-bd94-404f-9b1e-fd86818f4593",
+      "name": "لخّص الأعداد",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ ملف الرسائل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ ملف الرسائل": {
+      "main": [
+        [
+          {
+            "node": "استخرج صفوف الإكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "استخرج صفوف الإكسل": {
+      "main": [
+        [
+          {
+            "node": "البرومبت (التعليمات)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "البرومبت (التعليمات)": {
+      "main": [
+        [
+          {
+            "node": "صنّف الرسالة (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "صنّف الرسالة (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "حلّل النتيجة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "حلّل النتيجة": {
+      "main": [
+        [
+          {
+            "node": "رتّب حسب الفئة",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "جهّز الأعمدة": {
+      "main": [
+        [
+          {
+            "node": "ابنِ ملف إكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ ملف إكسل": {
+      "main": [
+        [
+          {
+            "node": "احفظ الناتج",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "رتّب حسب الفئة": {
+      "main": [
+        [
+          {
+            "node": "جهّز الأعمدة",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "لخّص الأعداد",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
