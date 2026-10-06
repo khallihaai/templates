@@ -1,0 +1,167 @@
+{
+  "name": "رتّب مجلد التنزيلات تلقائياً: فواتير وعقود وصور في مجلدات مؤرّخة (SAMPLE DATA)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "26618320-ae5d-431f-a754-74be89370532",
+      "name": "عند الضغط على تنفيذ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "downloads/*",
+        "options": {}
+      },
+      "id": "1c1498b9-961e-476b-907c-d85a06606caf",
+      "name": "اقرأ مجلد التنزيلات",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const fs = require('fs');\nconst { execFileSync } = require('child_process');\n\nconst IMG = new Set(['jpg','jpeg','png','gif','webp','bmp','heic']);\nconst PDF = new Set(['pdf']);\nconst DOC = new Set(['txt','csv','doc','docx','rtf','odt','md']);\nconst CAT = {\n  invoice:  { folder: 'فواتير', prefix: 'فاتورة' },\n  contract: { folder: 'عقود',   prefix: 'عقد' },\n  photo:    { folder: 'صور',    prefix: 'صورة' },\n  other:    { folder: 'أخرى',   prefix: 'ملف' },\n};\nconst UNDATED = 'غير-مؤرّخ';\nconst pad2 = n => String(n).padStart(2, '0');\n\n// strip bidi control marks + tatweel so Arabic keywords match cleanly\nconst stripBidi = s => (s || '').replace(/[‎‏‪-‮ـ]/g, '');\n\n// read the PDF's own text with poppler (the LibreOffice-made PDFs carry a clean text layer)\nfunction pdfText(name) {\n  try { return execFileSync('pdftotext', ['downloads/' + name, '-'],\n                            { encoding: 'utf8', maxBuffer: 20971520 }); }\n  catch (e) { return ''; }\n}\n\n// a date from any string, robust to bidi reversal (D-M-Y or Y-M-D). Month = middle group.\nfunction parseDate(text) {\n  const t = text || '';\n  let m = t.match(/(?<!\\d)(20\\d\\d)(\\d\\d)(\\d\\d)(?!\\d)/);   // compact YYYYMMDD (IMG_20260311)\n  let y, mo, d;\n  if (m) { y = m[1]; mo = m[2]; d = m[3]; }\n  else {\n    m = t.match(/(\\d{2,4})[-\\/_.](\\d{1,2})[-\\/_.](\\d{2,4})/);\n    if (!m) return null;\n    const a = m[1], mid = m[2], c = m[3];\n    if (a.length === 4) { y = a; d = c; }\n    else if (c.length === 4) { y = c; d = a; }\n    else return null;\n    mo = mid;\n  }\n  const yi = +y, moi = +mo, di = +d;\n  if (!(yi >= 2000 && yi <= 2099 && moi >= 1 && moi <= 12 && di >= 1 && di <= 31)) return null;\n  return String(yi).padStart(4, '0') + '-' + pad2(moi) + '-' + pad2(di);\n}\n\nconst items = $input.all();\n// stable order by original file name, so the clean numbering is reproducible\nconst order = items.map((it, idx) => ({ idx, name: it.binary.data.fileName }))\n  .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));\n\nconst counters = { invoice: 0, contract: 0, photo: 0, other: 0 };\nconst dirs = new Set();\nconst out = [];\nfor (const o of order) {\n  const it = items[o.idx];\n  const name = it.binary.data.fileName;\n  const ext = (name.includes('.') ? name.split('.').pop() : '').toLowerCase();\n  let category, dateSrc;\n  if (IMG.has(ext)) { category = 'photo'; dateSrc = name; }\n  else if (PDF.has(ext)) {\n    const text = stripBidi(pdfText(name));\n    if (text.indexOf('فاتورة') >= 0 || /invoice/i.test(text)) category = 'invoice';\n    else if (text.indexOf('عقد') >= 0 || /contract/i.test(text)) category = 'contract';\n    else category = 'other';\n    dateSrc = text + ' ' + name;\n  }\n  else if (DOC.has(ext)) { category = 'other'; dateSrc = name; }\n  else { category = 'other'; dateSrc = name; }\n\n  const iso = parseDate(dateSrc);\n  counters[category] += 1;\n  const seq = pad2(counters[category]);\n  const c = CAT[category];\n  let folder, newname;\n  if (iso) { folder = c.folder + '/' + iso.slice(0, 7); newname = c.prefix + '-' + iso + '-' + seq + '.' + ext; }\n  else { folder = c.folder + '/' + UNDATED; newname = c.prefix + '-' + seq + '.' + ext; }\n  dirs.add(folder);\n  out.push({\n    json: {\n      'الملف الأصلي': name, 'التصنيف': c.folder, 'التاريخ': iso || '',\n      'المجلد الجديد': folder, 'الاسم الجديد': newname,\n      folder: folder, newname: newname, category: category,\n    },\n    binary: it.binary,\n  });\n}\n// the Write node does not create missing parent folders, so make them here\nfor (const f of dirs) { fs.mkdirSync('sorted/' + f, { recursive: true }); }\nreturn out;\n"
+      },
+      "id": "183718fc-e8cc-4896-bf8e-5d2147bc218b",
+      "name": "صنّف حسب النوع والتاريخ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=sorted/{{$json.folder}}/{{$json.newname}}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "a31e2b4e-5e51-4000-b1f6-d02cf0a72aeb",
+      "name": "رتّب الملفات في مجلدات",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().map(it => {\n  const j = it.json;\n  return { json: {\n    'الملف الأصلي': j['الملف الأصلي'],\n    'التصنيف': j['التصنيف'],\n    'التاريخ': j['التاريخ'] || '—',\n    'المجلد الجديد': j['المجلد الجديد'],\n    'الاسم الجديد': j['الاسم الجديد'],\n  } };\n});\n"
+      },
+      "id": "131b43cc-4e92-4df2-962d-b1ebe5ecd3eb",
+      "name": "ملخّص الترتيب",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const XLSX = require('@e965/xlsx');\nconst rows = $input.all().map(i => i.json);\nconst header = ['الملف الأصلي', 'التصنيف', 'التاريخ', 'المجلد الجديد', 'الاسم الجديد'];\nconst aoa = [['سجل ترتيب التنزيلات (SAMPLE DATA)'], [], header];\nconst counts = {};\nfor (const r of rows) {\n  aoa.push([r['الملف الأصلي'], r['التصنيف'], r['التاريخ'] || '—', r['المجلد الجديد'], r['الاسم الجديد']]);\n  counts[r['التصنيف']] = (counts[r['التصنيف']] || 0) + 1;\n}\naoa.push([]);\nconst parts = Object.keys(counts).map(k => k + ': ' + counts[k]).join('   ·   ');\naoa.push(['الإجمالي: ' + rows.length + ' ملفاً', parts]);\nconst wb = XLSX.utils.book_new();\nconst ws = XLSX.utils.aoa_to_sheet(aoa);\nws['!cols'] = [{ wch: 34 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 30 }];\nXLSX.utils.book_append_sheet(wb, ws, 'سجل الترتيب');\nconst buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });\nconst bin = await this.helpers.prepareBinaryData(Buffer.from(buf), 'سجل-الترتيب.xlsx',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { files: rows.length, counts: counts }, binary: { data: bin } }];\n"
+      },
+      "id": "7e61c50d-b014-48e8-b3b0-b6de1abfeb1f",
+      "name": "ابنِ سجل الإكسل",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "output/سجل-الترتيب.xlsx",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "8a5bc409-ad01-45b9-a29b-49e4ae57b459",
+      "name": "احفظ السجل",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1240,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "عند الضغط على تنفيذ": {
+      "main": [
+        [
+          {
+            "node": "اقرأ مجلد التنزيلات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "اقرأ مجلد التنزيلات": {
+      "main": [
+        [
+          {
+            "node": "صنّف حسب النوع والتاريخ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "صنّف حسب النوع والتاريخ": {
+      "main": [
+        [
+          {
+            "node": "رتّب الملفات في مجلدات",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ملخّص الترتيب",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ابنِ سجل الإكسل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ابنِ سجل الإكسل": {
+      "main": [
+        [
+          {
+            "node": "احفظ السجل",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
